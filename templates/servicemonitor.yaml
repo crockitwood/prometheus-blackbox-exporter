@@ -1,0 +1,47 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- range $index,$url := .Values.serviceMonitor.targets }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: domain-{{ $url | replace "https://" "" | replace "." "-" }}
+  namespace: {{ template "prometheus-blackbox-exporter.namespace" $ }}
+  labels:
+    {{- include "prometheus-blackbox-exporter.labels" $ | nindent 4 }}
+    {{- if $.Values.serviceMonitor.defaults.labels }}
+    {{- toYaml $.Values.serviceMonitor.defaults.labels | nindent 4 }}
+    {{- end }}
+spec:
+  endpoints:
+  - port: http
+    scheme: {{ $.Values.serviceMonitor.scheme }}
+    {{- if $.Values.serviceMonitor.bearerTokenFile }}
+    bearerTokenFile: {{ $.Values.serviceMonitor.bearerTokenFile }}
+    {{- end }}
+    {{- if $.Values.serviceMonitor.tlsConfig }}
+    tlsConfig: {{ toYaml $.Values.serviceMonitor.tlsConfig | nindent 6 }}
+    {{- end }}
+    path: "/probe"
+    interval: {{ $.Values.serviceMonitor.scrapeInterval }}
+    scrapeTimeout: 60s
+    params:
+      module:
+      - {{ $.Values.serviceMonitor.defaults.module }}
+      target:
+      - {{ $url }}
+    relabelings:
+      - sourceLabels: [instance]
+        targetLabel: instance
+        replacement: {{ $url }}
+      - sourceLabels: [target]
+        targetLabel: target
+        replacement: {{ $url | replace "https://" "" | replace "." "-" }}
+  jobLabel: "{{ $.Release.Name }}"
+  selector:
+    matchLabels:
+      {{- include "prometheus-blackbox-exporter.selectorLabels" $ | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ template "prometheus-blackbox-exporter.namespace" $ }}
+{{- end }}
+{{- end }}
